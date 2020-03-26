@@ -44,25 +44,29 @@ print('22.01.2020 - First cases.')
 print('11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
 print(f'{TODAY_DATE.strftime("%d.%m.%Y")} - Today...')
 
+# Update database:
+def db_update():
+	site = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
+	filelist = [f"{(START_DATE + datetime.timedelta(days=x)).strftime('%m-%d-%Y')}.csv" for x in range(0,(TODAY_DATE-START_DATE).days+1)]
 
-site = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
-filelist = [f"{(START_DATE + datetime.timedelta(days=x)).strftime('%m-%d-%Y')}.csv" for x in range(0,(TODAY_DATE-START_DATE).days+1)]
+	for file in filelist:
+		if not path.exists(file):
+			print('Updating database:',round(100/len(filelist)*(filelist.index(file)+1)),'%','\r',end="",flush=True)
+			url = f'{site}/{file}'
+			response = requests.get(url)
+			if response.status_code == 200:
+				# if response is ok - download csv file
+				with open(file,'wb') as f:
+					f.write(response.content)
 
-for file in filelist:
-	if not path.exists(file):
-		print('Updating database:',round(100/len(filelist)*(filelist.index(file)+1)),'%','\r',end="",flush=True)
-		url = f'{site}/{file}'
-		response = requests.get(url)
-		if response.status_code == 200:
-			with open(file,'wb') as f:
-				f.write(response.content)
-			with open(file,'r') as f:
-				data = csv.reader(f)
-				next(data)
-				for row in data:
-					#print(row)
-					c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",(row[1],row[0],file,row[2],row[3],row[4],row[5]))
-				conn.commit()
+				# now read the file and parse headers to update database
+				with open(file,'r',encoding='utf-8-sig') as f:
+					data = csv.reader(f)
+					next(data)
+					for row in data:
+						#print(row)
+						c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",(row[1],row[0],file,row[2],row[3],row[4],row[5]))
+					conn.commit()
 
 # Some database corrections:
 def db_correction():
@@ -86,6 +90,7 @@ def db_correction():
 	c.execute("UPDATE daily_cases SET country = 'Palestine' WHERE country = 'occupied Palestinian territory'")
 	conn.commit()
 
+db_update()
 db_correction()
 print()
 while True:
