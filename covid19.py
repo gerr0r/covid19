@@ -60,13 +60,62 @@ def db_update():
 					f.write(response.content)
 
 				# now read the file and parse headers to update database
-				with open(file,'r',encoding='utf-8-sig') as f:
-					data = csv.reader(f)
-					next(data)
-					for row in data:
-						#print(row)
-						c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",(row[1],row[0],file,row[2],row[3],row[4],row[5]))
-					conn.commit()
+				with open(file, 'r', encoding='utf-8-sig') as f:
+					f_data = csv.DictReader(f)
+					csv_headers = {
+						'country': ['Country/Region', 'Country_Region'],
+						'region': ['Province/State', 'Province_State'],
+						'last_update' : ['Last Update', 'Last_Update'],
+						'confirmed': ['Confirmed'],
+						'deaths': ['Deaths'],
+						'recovered': ['Recovered']
+						}
+					update = True
+					for key,value in csv_headers.items():
+						if any(i in value for i in f_data.fieldnames): # True or False if header exists
+							header = list(set(value).intersection(f_data.fieldnames))[0]
+							csv_headers[key] = header
+						else:
+							print(f'Warning - {key} header not found.')
+							current_headers = {i: f_data.fieldnames[i] for i in range(0, len(f_data.fieldnames))}
+							print(f'To avoid database corruption please check csv file {f.name} and select the correct header number or press ctrl+c to abort...')
+							print(f'Current headers are {current_headers}')
+							header = input('Select header: ')
+							while True:
+								try:
+									new_header = current_headers[int(header)]
+									confirm = input(f'New header for {key} will be added as: {new_header}. Are you sure? (y/n): ')
+									if confirm == 'y':
+										print(f'{new_header} added to {key} headers.')
+										csv_headers[key] = new_header
+										break
+									elif confirm == 'n':
+										update = False
+										break
+									else:
+										continue
+								except:
+									header = input('Invalid header selection. Try again: ')
+							else:
+								continue
+							if confirm != 'y': break
+					if update:
+						for row in f_data:
+							c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",
+								  (row[csv_headers['country']],
+								   row[csv_headers['region']],
+								   file,
+								   row[csv_headers['last_update']],
+								   row[csv_headers['confirmed']],
+								   row[csv_headers['deaths']],
+								   row[csv_headers['recovered']])
+								  )
+						conn.commit()
+					else:
+						print('Database can not be updated because csv structure is incompatible.')
+						print('You can update manually later using the update command.')
+						print('For more information type: help update')
+
 
 # Some database corrections:
 def db_correction():
