@@ -1,6 +1,7 @@
 from os import path
 import requests
 import csv
+import json
 import sqlite3
 import readline
 import datetime
@@ -22,6 +23,19 @@ def complete(text, state):
 	else: return matches[state]
 
 readline.set_completer(complete)
+
+# Check if csv_headers.json file exists
+def load_json():
+	if not path.exists('csv_headers.json'):
+		db_fields = ['country','region','last_update','confirmed','deaths','recovered']
+		csv_headers = {key: [] for key in db_fields}
+		with open('csv_headers.json','w') as f:
+			json.dump(csv_headers,f,indent=2)
+	else:
+		with open('csv_headers.json') as f:
+			csv_headers = json.load(f)
+	return csv_headers
+
 
 
 conn = sqlite3.connect('covid19.db')
@@ -46,6 +60,7 @@ print(f'{TODAY_DATE.strftime("%d.%m.%Y")} - Today...')
 
 # Update database:
 def db_update():
+	csv_headers_json = load_json()
 	site = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
 	filelist = [f"{(START_DATE + datetime.timedelta(days=x)).strftime('%m-%d-%Y')}.csv" for x in range(0,(TODAY_DATE-START_DATE).days+1)]
 
@@ -62,35 +77,37 @@ def db_update():
 				# now read the file and parse headers to update database
 				with open(file, 'r', encoding='utf-8-sig') as f:
 					f_data = csv.DictReader(f)
-					csv_headers = {
-						'country': ['Country/Region', 'Country_Region'],
-						'region': ['Province/State', 'Province_State'],
-						'last_update' : ['Last Update', 'Last_Update'],
-						'confirmed': ['Confirmed'],
-						'deaths': ['Deaths'],
-						'recovered': ['Recovered']
-						}
-					update = True
-					for key,value in csv_headers.items():
-						if any(i in value for i in f_data.fieldnames): # True or False if header exists
-							header = list(set(value).intersection(f_data.fieldnames))[0]
-							csv_headers[key] = header
+					csv_headers_current = f_data.fieldnames
+					csv_headers_for_db = {}
+					current_headers_selector = {i: csv_headers_current[i] for i in range(0, len(csv_headers_current))}
+					update_db = True
+					update_json = False
+					messages = True
+					for key,value in csv_headers_json.items():
+						if any(i in value for i in csv_headers_current): # True or False if header exists
+							header = list(set(value).intersection(csv_headers_current))[0]
+							csv_headers_for_db[key] = header
 						else:
-							print(f'Warning - {key} header not found.')
-							current_headers = {i: f_data.fieldnames[i] for i in range(0, len(f_data.fieldnames))}
-							print(f'To avoid database corruption please check csv file {f.name} and select the correct header number or press ctrl+c to abort...')
-							print(f'Current headers are {current_headers}')
-							header = input('Select header: ')
+							if messages:
+								print(f'Warning - headers not found.')
+								print(f'To avoid database corruption please check csv file {f.name} and select the correct header number or press ctrl+c to abort...')
+								print(f'Current headers are: ')
+								for x,y in current_headers_selector.items():
+									print(f'{x}: {y}')
+								messages = False
+							header = input(f'Select header for {key}: ')
 							while True:
 								try:
-									new_header = current_headers[int(header)]
+									new_header = current_headers_selector[int(header)]
 									confirm = input(f'New header for {key} will be added as: {new_header}. Are you sure? (y/n): ')
 									if confirm == 'y':
 										print(f'{new_header} added to {key} headers.')
-										csv_headers[key] = new_header
+										csv_headers_json[key].append(new_header)
+										csv_headers_for_db[key] = new_header
+										update_json = True
 										break
 									elif confirm == 'n':
-										update = False
+										update_db = False
 										break
 									else:
 										continue
@@ -99,16 +116,22 @@ def db_update():
 							else:
 								continue
 							if confirm != 'y': break
-					if update:
+					else: # else statement will be executed if for loop isn't broken
+						if update_json:
+							with open('csv_headers.json','w') as f:
+								json.dump(csv_headers_json,f,indent=2)
+							csv_headers_json = load_json()
+							
+					if update_db:
 						for row in f_data:
 							c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",
-								  (row[csv_headers['country']],
-								   row[csv_headers['region']],
+								  (row[csv_headers_for_db['country']],
+								   row[csv_headers_for_db['region']],
 								   file,
-								   row[csv_headers['last_update']],
-								   row[csv_headers['confirmed']],
-								   row[csv_headers['deaths']],
-								   row[csv_headers['recovered']])
+								   row[csv_headers_for_db['last_update']],
+								   row[csv_headers_for_db['confirmed']],
+								   row[csv_headers_for_db['deaths']],
+								   row[csv_headers_for_db['recovered']])
 								  )
 						conn.commit()
 					else:
