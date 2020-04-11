@@ -2,3 +2,4 @@
 *.swp
 tests.py
 .idea/
+cmd_examples

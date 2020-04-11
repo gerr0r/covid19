@@ -9,6 +9,8 @@ import math
 from matplotlib import pyplot as plt
 from pprint import pprint
 
+import validate
+
 readline.parse_and_bind('tab: complete')
 
 commands = ['stats','list','graph','quit','exit','update','q','info','pie']
@@ -68,6 +70,7 @@ def db_update():
 		if not path.exists(file):
 			print('Updating database:',round(100/len(filelist)*(filelist.index(file)+1)),'%','\r',end="",flush=True)
 			url = f'{site}/{file}'
+			csv_file = f"{file.split('.')[0].split('-')[2]}-{file.split('.')[0].split('-')[0]}-{file.split('.')[0].split('-')[1]}"
 			response = requests.get(url)
 			if response.status_code == 200:
 				# if response is ok - download csv file
@@ -127,7 +130,7 @@ def db_update():
 							c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",
 								  (row[csv_headers_for_db['country']],
 								   row[csv_headers_for_db['region']],
-								   file,
+								   csv_file,
 								   row[csv_headers_for_db['last_update']],
 								   row[csv_headers_for_db['confirmed']],
 								   row[csv_headers_for_db['deaths']],
@@ -162,8 +165,8 @@ def db_correction():
 	c.execute("UPDATE daily_cases SET country = 'Palestine' WHERE country = 'occupied Palestinian territory'")
 	conn.commit()
 
-db_update()
-db_correction()
+#db_update()
+#db_correction()
 print()
 while True:
 	command = False
@@ -172,14 +175,18 @@ while True:
 
 	if command[0] == 'graph':
 		if len(command) == 1:
-			country = 'Global'
+			req = 'Global'
 			c.execute("SELECT csv_file,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY csv_file ORDER BY csv_file")
 		else:
-			country = command[1]
-			c.execute("SELECT csv_file,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases WHERE country=? GROUP BY csv_file ORDER BY csv_file", (country.capitalize(),))
+			req = command[1].replace('_',' ')
+			c.execute("""SELECT csv_file,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases
+					WHERE country = 
+					(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3)))
+					GROUP BY csv_file
+					ORDER BY csv_file""",(req,))
 		data = c.fetchall()
 		if len(data) == 0:
-			print(f'{country.upper()}: Input not found...')
+			print(f'{req.upper()}: Input not found...')
 			continue
 		else:
 			dates,confirmed,deaths,recovered,active = [], [], [], [], []
@@ -195,7 +202,7 @@ while True:
 		plt.plot(dates,active,label='Active',color='y')
 		plt.xlabel('Date')
 		plt.ylabel('Total cases')
-		plt.title(f'COVID-19 {country.upper()} CASES')
+		plt.title(f'COVID-19 {req.upper()} CASES')
 		plt.legend()
 		plt.show()
 
@@ -208,15 +215,16 @@ while True:
 			confirmed,deaths,recovered = data[0]
 			active = confirmed - deaths - recovered
 		else:
+			req = command[1].replace('_',' ')
 			c.execute("""SELECT country,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases 
 					WHERE country = 
 					(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3))) 
 					GROUP BY csv_file 
 					ORDER BY csv_file DESC 
-					LIMIT 1""", (command[1],))
+					LIMIT 1""", (req,))
 			data = c.fetchall()
 			if len(data) == 0:
-				print(f'{command[1]}: Input not found...')
+				print(f'{req}: Input not found...')
 				continue
 			else:
 				country,confirmed,deaths,recovered = data[0]
@@ -306,20 +314,69 @@ while True:
 
 
 	elif command[0] == 'bar':
-		c.execute('SELECT csv_file,sum(deaths) FROM daily_cases GROUP BY csv_file ORDER BY csv_file LIMIT ?',(command[1],))
+		""" Usage: bar [country] [case] [grouping] [period] """
+		try:
+			country,case,grouping,period = validate.commandline(command) 
+		except ValueError as error:
+			print(str(error))
+			continue
+		try:
+			db_group,reference,first_date,last_date = validate.period(grouping,period)
+		except ValueError as error:
+			print(str(error))
+			continue
+		print(db_group,first_date,last_date)
+		#continue
+		
+		query = validate.dbquery(command[0],country=country,case=case,grouping=grouping,db_group=db_group,first_date=first_date,last_date=last_date)
+		c.execute(query)
+#		print(query)
+#		continue
+#		c.execute(f"""
+#				SELECT max(csv_file),mnt,week,{case},{case}-lag({case},1,0) OVER (ORDER BY {db_group}) as diff FROM (
+#					SELECT csv_file,strftime('%m',csv_file) AS mnt,strftime('%W',csv_file) AS week, sum({case}) AS {case} FROM daily_cases
+#					WHERE country =  
+#						(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3))) 
+#					AND {db_group} BETWEEN ? AND ?
+#					GROUP BY csv_file)
+#				GROUP BY {db_group}
+#			""",(country,first_date,last_date))
 		data = c.fetchall()
-		dates, deaths = [],[0]
-		for row in data:
-			dates.append(f"{row[0].split('-')[1]}.{row[0].split('-')[0]}")
-			deaths.append(row[1]-deaths[-1])
-		del deaths[0] # remove the dummy 0 from the list
-		print(dates)
-		print(deaths)
-		plt.bar(dates,deaths)
+		pprint(data)
+		print(query)
+		#continue
+		if len(data) == 0:
+			print(f'{country.upper()}: Input not found...')
+			continue
+		#print(data)
+		# next check is if the week we asked is referenced by the week before it
+		# and if this is the case then first row is only for reference so we delete it
+		# !!! refactor later !!!
+		if (db_group == 'week' and reference and int(data[0][1]) < int(first_date) + 1) or \
+                   (db_group == 'mnt' and reference and int(data[0][1]) < int(first_date) + 1) or \
+                   (db_group == 'csv_file' and reference and data[0][1] < (datetime.date.fromisoformat(first_date) + datetime.timedelta(days=1)).isoformat()):
+			del data[0]
+		pprint(data)
+		#continue
+		db_dummy, db_dates, db_cases, db_diff = list(zip(*data))
+		
+		if grouping in ('m','monthly'): graph_dates = [f"M{int(i)}" for i in db_dates]
+		elif grouping in ('w','weekly'): graph_dates = [f"W{int(i)}" for i in db_dates]
+		else: graph_dates = [f"{i.split('-')[2]}.{i.split('-')[1]}" for i in db_dates]
+
+		#for i in range(0,len(data)):
+		#	print(db_dates[i],db_months[i],db_weeks[i],db_cases[i],'\t',dates[i],months[i],weeks[i],cases[i-1])
+		#continue
+		#print(dates)
+		#print(cases)
+		plt.bar(graph_dates,db_diff)
+		plt.title(country)
 		plt.show()
 
 	elif command[0] == 'update':
-		pass
+		db_update()
+		print()
+		db_correction()
 
 
 	elif command[0] == 'list':
@@ -337,7 +394,7 @@ while True:
 		for row in data:
 			print(f'{row[0]}\t{row[1]}\t{row[2]}')
 		print(30*'=')
-		print(f'{len(data)} results found. Done!')
+		print(f'{len(data)} results found.')
 
 
 	elif command[0] == 'info':

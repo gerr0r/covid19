@@ -1,0 +1,23 @@
+{
+  "country": [
+    "Country/Region",
+    "Country_Region"
+  ],
+  "region": [
+    "Province/State",
+    "Province_State"
+  ],
+  "last_update": [
+    "Last Update",
+    "Last_Update"
+  ],
+  "confirmed": [
+    "Confirmed"
+  ],
+  "deaths": [
+    "Deaths"
+  ],
+  "recovered": [
+    "Recovered"
+  ]
+}
