@@ -325,30 +325,18 @@ while True:
 		except ValueError as error:
 			print(str(error))
 			continue
-		print(db_group,first_date,last_date)
-		#continue
+#		print(db_group,first_date,last_date)
 		
 		query = validate.dbquery(command[0],country=country,case=case,grouping=grouping,db_group=db_group,first_date=first_date,last_date=last_date)
 		c.execute(query)
-#		print(query)
-#		continue
-#		c.execute(f"""
-#				SELECT max(csv_file),mnt,week,{case},{case}-lag({case},1,0) OVER (ORDER BY {db_group}) as diff FROM (
-#					SELECT csv_file,strftime('%m',csv_file) AS mnt,strftime('%W',csv_file) AS week, sum({case}) AS {case} FROM daily_cases
-#					WHERE country =  
-#						(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3))) 
-#					AND {db_group} BETWEEN ? AND ?
-#					GROUP BY csv_file)
-#				GROUP BY {db_group}
-#			""",(country,first_date,last_date))
 		data = c.fetchall()
-		pprint(data)
-		print(query)
-		#continue
+#		pprint(data)
+#		print(query)
+
 		if len(data) == 0:
 			print(f'{country.upper()}: Input not found...')
 			continue
-		#print(data)
+
 		# next check is if the week we asked is referenced by the week before it
 		# and if this is the case then first row is only for reference so we delete it
 		# !!! refactor later !!!
@@ -356,19 +344,14 @@ while True:
                    (db_group == 'mnt' and reference and int(data[0][1]) < int(first_date) + 1) or \
                    (db_group == 'csv_file' and reference and data[0][1] < (datetime.date.fromisoformat(first_date) + datetime.timedelta(days=1)).isoformat()):
 			del data[0]
-		pprint(data)
-		#continue
+#		pprint(data)
+
 		db_dummy, db_dates, db_cases, db_diff = list(zip(*data))
 		
 		if grouping in ('m','monthly'): graph_dates = [f"M{int(i)}" for i in db_dates]
 		elif grouping in ('w','weekly'): graph_dates = [f"W{int(i)}" for i in db_dates]
 		else: graph_dates = [f"{i.split('-')[2]}.{i.split('-')[1]}" for i in db_dates]
 
-		#for i in range(0,len(data)):
-		#	print(db_dates[i],db_months[i],db_weeks[i],db_cases[i],'\t',dates[i],months[i],weeks[i],cases[i-1])
-		#continue
-		#print(dates)
-		#print(cases)
 		plt.bar(graph_dates,db_diff)
 		plt.title(country)
 		plt.show()
@@ -403,7 +386,36 @@ while True:
 			pprint(c.fetchall())
 		except:
 			print('Info error: country not specified.')
-			
+
+
+	elif command[0] == 'help':
+		command.append('')
+		if not command[1]:
+			print('')
+			print('Quick list of available commands.')
+			print('For more info type help [command].')
+			print('Commands:')
+			print('')
+			print('help\t| Displays this quick help information or help on specified available command.')
+			print('graph\t| Displays current status on specified country.')
+			print('update\t| Updates database.')
+			print('bar\t| Displays specified cases on a daily, weekly or monthly period for the given country.')
+			print('')
+		elif command[1] == 'bar':
+			print("""
+				Usage: bar [country] [case] [grouping] [period]
+				[country] - country name, iso2, iso3 or code of the country
+				[case] - confirmed, deaths or recovered. 'c', 'd' or 'r' as shortcuts
+				[grouping] - daily, weekly or monthly stats. 'd', 'w' or 'm' as shortcuts
+				[period] - format is from_date:to_date
+						if daily grouping is specified format is d.m:d.m (ex. 30.3:4.4 means 30th March to 4th April inclusive)
+						if weekly grouping is specified format is w:w (ex. 12:15 means ISO week 12 to week 15 inclusive)
+						if monthly grouping is specified format is m:m (ex. 2:5 means months February to May inclusive)
+						if period is ommited it is replaced with full period for the year (daily - 1.1:31.12, weekly - 0:53, monthly 1:12)
+						if one side if the period is ommited it is replaced with begining or the end of the year:
+							- from_date: means from given day (week, month) to the end of the year
+							- :to_date means from begining of the year to given day (week, month)
+				""")
 
 
 	elif command[0] in ('q','quit','exit'):
