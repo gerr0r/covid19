@@ -1,19 +1,15 @@
-from os import path
-import requests
-import csv
-import json
-import sqlite3
 import readline
 import datetime
 import math
 from matplotlib import pyplot as plt
 from pprint import pprint
+import os
 
 import validate
 
 readline.parse_and_bind('tab: complete')
 
-commands = ['stats','list','graph','quit','exit','update','q','info','pie']
+commands = ['stats','list','graph','quit','exit','update','q','info','help']
 
 def complete(text, state):
 	# generate tab completion list
@@ -25,191 +21,36 @@ def complete(text, state):
 	else: return matches[state]
 
 readline.set_completer(complete)
+readline.read_history_file('histfile')
 
-# Check if csv_headers.json file exists
-def load_json():
-	if not path.exists('csv_headers.json'):
-		db_fields = ['country','region','last_update','confirmed','deaths','recovered']
-		csv_headers = {key: [] for key in db_fields}
-		with open('csv_headers.json','w') as f:
-			json.dump(csv_headers,f,indent=2)
-	else:
-		with open('csv_headers.json') as f:
-			csv_headers = json.load(f)
-	return csv_headers
+#os.system('clear')
 
-
-
-conn = sqlite3.connect('covid19.db')
-c = conn.cursor()
-c.execute("""CREATE TABLE IF NOT EXISTS daily_cases ( 
-					country TEXT,
-					region TEXT,
-					csv_file TEXT,
-					last_update TEXT,
-					confirmed INTEGER NOT NULL DEFAULT 0,
-					deaths INTEGER NOT NULL DEFAULT 0,
-					recovered INTEGER NOT NULL DEFAULT 0)
-					""")
-
-
-START_DATE = datetime.date(2020,1,22)
-TODAY_DATE = datetime.date.today()
-print('Dec   2019 - COVID-19 anounced in Wuhan, China.')
-print('22.01.2020 - First cases.')
-print('11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
-print(f'{TODAY_DATE.strftime("%d.%m.%Y")} - Today...')
-
-# Update database:
-def db_update():
-	csv_headers_json = load_json()
-	site = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
-	filelist = [f"{(START_DATE + datetime.timedelta(days=x)).strftime('%m-%d-%Y')}.csv" for x in range(0,(TODAY_DATE-START_DATE).days+1)]
-
-	for file in filelist:
-		if not path.exists(file):
-			print('Updating database:',round(100/len(filelist)*(filelist.index(file)+1)),'%','\r',end="",flush=True)
-			url = f'{site}/{file}'
-			csv_file = f"{file.split('.')[0].split('-')[2]}-{file.split('.')[0].split('-')[0]}-{file.split('.')[0].split('-')[1]}"
-			response = requests.get(url)
-			if response.status_code == 200:
-				# if response is ok - download csv file
-				with open(file,'wb') as f:
-					f.write(response.content)
-
-				# now read the file and parse headers to update database
-				with open(file, 'r', encoding='utf-8-sig') as f:
-					f_data = csv.DictReader(f)
-					csv_headers_current = f_data.fieldnames
-					csv_headers_for_db = {}
-					current_headers_selector = {i: csv_headers_current[i] for i in range(0, len(csv_headers_current))}
-					update_db = True
-					update_json = False
-					messages = True
-					for key,value in csv_headers_json.items():
-						if any(i in value for i in csv_headers_current): # True or False if header exists
-							header = list(set(value).intersection(csv_headers_current))[0]
-							csv_headers_for_db[key] = header
-						else:
-							if messages:
-								print(f'Warning - headers not found.')
-								print(f'To avoid database corruption please check csv file {f.name} and select the correct header number or press ctrl+c to abort...')
-								print(f'Current headers are: ')
-								for x,y in current_headers_selector.items():
-									print(f'{x}: {y}')
-								messages = False
-							header = input(f'Select header for {key}: ')
-							while True:
-								try:
-									new_header = current_headers_selector[int(header)]
-									confirm = input(f'New header for {key} will be added as: {new_header}. Are you sure? (y/n): ')
-									if confirm == 'y':
-										print(f'{new_header} added to {key} headers.')
-										csv_headers_json[key].append(new_header)
-										csv_headers_for_db[key] = new_header
-										update_json = True
-										break
-									elif confirm == 'n':
-										update_db = False
-										break
-									else:
-										continue
-								except:
-									header = input('Invalid header selection. Try again: ')
-							else:
-								continue
-							if confirm != 'y': break
-					else: # else statement will be executed if for loop isn't broken
-						if update_json:
-							with open('csv_headers.json','w') as f:
-								json.dump(csv_headers_json,f,indent=2)
-							csv_headers_json = load_json()
-							
-					if update_db:
-						for row in f_data:
-							c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?,?,?)",
-								  (row[csv_headers_for_db['country']],
-								   row[csv_headers_for_db['region']],
-								   csv_file,
-								   row[csv_headers_for_db['last_update']],
-								   row[csv_headers_for_db['confirmed']],
-								   row[csv_headers_for_db['deaths']],
-								   row[csv_headers_for_db['recovered']])
-								  )
-						conn.commit()
-					else:
-						print('Database can not be updated because csv structure is incompatible.')
-						print('You can update manually later using the update command.')
-						print('For more information type: help update')
-
-
-# Some database corrections:
-def db_correction():
-	c.execute("UPDATE daily_cases SET confirmed = 0 WHERE confirmed = ''")
-	c.execute("DELETE FROM daily_cases WHERE confirmed = 0")
-	c.execute("UPDATE daily_cases SET deaths = 0 WHERE deaths = ''")
-	c.execute("UPDATE daily_cases SET recovered = 0 WHERE recovered = ''")
-	c.execute("UPDATE daily_cases SET country = 'China' WHERE country IN ('Mainland China','Macau','Macao SAR','Hong Kong','Hong Kong SAR')")
-	c.execute("UPDATE daily_cases SET country = 'Azerbaijan' WHERE country = ' Azerbaijan'")
-	c.execute("UPDATE daily_cases SET country = 'Iran' WHERE country = 'Iran (Islamic Republic of)'")
-	c.execute("UPDATE daily_cases SET country = 'South Korea' WHERE country IN ('Korea, South','Republic of Korea')")
-	c.execute("UPDATE daily_cases SET country = 'Ireland' WHERE country IN ('North Ireland','Republic of Ireland')")
-	c.execute("UPDATE daily_cases SET country = 'Vietnam' WHERE country = 'Viet Nam'")
-	c.execute("UPDATE daily_cases SET country = 'Czech Republic' WHERE country = 'Czechia'")
-	c.execute("UPDATE daily_cases SET country = 'Taiwan' WHERE country = 'Taiwan*'")
-	c.execute("UPDATE daily_cases SET country = 'Russia' WHERE country = 'Russian Federation'")
-	c.execute("UPDATE daily_cases SET country = 'Moldova' WHERE country = 'Republic of Moldova'")
-	c.execute("UPDATE daily_cases SET country = 'UK' WHERE country = 'United Kingdom'")
-	c.execute("UPDATE daily_cases SET country = 'Bahamas' WHERE country IN ('Bahamas, The','The Bahamas')")
-	c.execute("UPDATE daily_cases SET country = 'Gambia' WHERE country IN ('Gambia, The','The Gambia')")
-	c.execute("UPDATE daily_cases SET country = 'Palestine' WHERE country = 'occupied Palestinian territory'")
-	conn.commit()
-
-#db_update()
-#db_correction()
+print('December 2019 - COVID-19 anounced in Wuhan, China.')
+print('   22.01.2020 - First cases.')
+print('   11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
+print(f'   {datetime.date.today().strftime("%d.%m.%Y")} - Today.')
 print()
+
+validate.init_db()
 while True:
 	command = False
 	while not command:
-		command = input('Covid-19 >> ').split()
+		command = input('Covid-19 >> ')
+		readline.write_history_file('histfile')
+		try:
+			validate.commandline(command)
+		except ValueError as error:
+			print(str(error))
 
-	if command[0] == 'graph':
+while True:
+
+
+
+
+
+	if command[0] == 'pie':
 		if len(command) == 1:
-			req = 'Global'
-			c.execute("SELECT csv_file,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY csv_file ORDER BY csv_file")
-		else:
-			req = command[1].replace('_',' ')
-			c.execute("""SELECT csv_file,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases
-					WHERE country = 
-					(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3)))
-					GROUP BY csv_file
-					ORDER BY csv_file""",(req,))
-		data = c.fetchall()
-		if len(data) == 0:
-			print(f'{req.upper()}: Input not found...')
-			continue
-		else:
-			dates,confirmed,deaths,recovered,active = [], [], [], [], []
-		for row in data:
-			dates.append(row[0])
-			confirmed.append(row[1])
-			deaths.append(row[2])
-			recovered.append(row[3])
-			active.append(row[1] - row[2] - row[3])
-		plt.plot(dates,confirmed,label='Confirmed',color='r')
-		plt.plot(dates,deaths,label='Deaths',color='k')
-		plt.plot(dates,recovered,label='Recovered',color='g')
-		plt.plot(dates,active,label='Active',color='y')
-		plt.xlabel('Date')
-		plt.ylabel('Total cases')
-		plt.title(f'COVID-19 {req.upper()} CASES')
-		plt.legend()
-		plt.show()
-
-
-	elif command[0] == 'pie':
-		if len(command) == 1:
-			c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY csv_file ORDER BY csv_file DESC LIMIT 1")
+			c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY date ORDER BY date DESC LIMIT 1")
 			data = c.fetchall()
 			country = 'Global'
 			confirmed,deaths,recovered = data[0]
@@ -219,8 +60,8 @@ while True:
 			c.execute("""SELECT country,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases 
 					WHERE country = 
 					(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3))) 
-					GROUP BY csv_file 
-					ORDER BY csv_file DESC 
+					GROUP BY date 
+					ORDER BY date DESC 
 					LIMIT 1""", (req,))
 			data = c.fetchall()
 			if len(data) == 0:
@@ -313,58 +154,9 @@ while True:
 			pass
 
 
-	elif command[0] == 'bar':
-		""" Usage: bar [country] [case] [grouping] [period] """
-		try:
-			country,case,grouping,period = validate.commandline(command) 
-		except ValueError as error:
-			print(str(error))
-			continue
-		try:
-			db_group,reference,first_date,last_date = validate.period(grouping,period)
-		except ValueError as error:
-			print(str(error))
-			continue
-#		print(db_group,first_date,last_date)
-		
-		query = validate.dbquery(command[0],country=country,case=case,grouping=grouping,db_group=db_group,first_date=first_date,last_date=last_date)
-		c.execute(query)
-		data = c.fetchall()
-#		pprint(data)
-#		print(query)
-
-		if len(data) == 0:
-			print(f'{country.upper()}: Input not found...')
-			continue
-
-		# next check is if the week we asked is referenced by the week before it
-		# and if this is the case then first row is only for reference so we delete it
-		# !!! refactor later !!!
-		if (db_group == 'week' and reference and int(data[0][1]) < int(first_date) + 1) or \
-                   (db_group == 'mnt' and reference and int(data[0][1]) < int(first_date) + 1) or \
-                   (db_group == 'csv_file' and reference and data[0][1] < (datetime.date.fromisoformat(first_date) + datetime.timedelta(days=1)).isoformat()):
-			del data[0]
-#		pprint(data)
-
-		db_dummy, db_dates, db_cases, db_diff = list(zip(*data))
-		
-		if grouping in ('m','monthly'): graph_dates = [f"M{int(i)}" for i in db_dates]
-		elif grouping in ('w','weekly'): graph_dates = [f"W{int(i)}" for i in db_dates]
-		else: graph_dates = [f"{i.split('-')[2]}.{i.split('-')[1]}" for i in db_dates]
-
-		plt.bar(graph_dates,db_diff)
-		plt.title(country)
-		plt.show()
-
-	elif command[0] == 'update':
-		db_update()
-		print()
-		db_correction()
-
-
 	elif command[0] == 'list':
 		command.append('') # this will add empty second parameter which will cause printing of all results if not specified
-		c.execute("SELECT iso2,iso3,short_name FROM countries WHERE short_name LIKE ? ORDER BY short_name",(f'%{command[1]}%',))
+		c.execute("SELECT iso2,iso3,country_code,short_name FROM countries WHERE short_name LIKE ? ORDER BY short_name",(f'%{command[1]}%',))
 		data = c.fetchall()
 		if not data: 
 			print(f'{command[1]}: Results not found...')
@@ -372,10 +164,10 @@ while True:
 		if command[1]: 
 			print(f'Search for: {command[1]}')
 			print(30*'=')
-		print('ISO2\tISO3\tNames')
+		print('ISO2\tISO3\tCode\tNames')
 		print(30*'=')
 		for row in data:
-			print(f'{row[0]}\t{row[1]}\t{row[2]}')
+			print(f'{row[0]}\t{row[1]}\t{row[2]}\t{row[3]}')
 		print(30*'=')
 		print(f'{len(data)} results found.')
 
@@ -391,36 +183,44 @@ while True:
 	elif command[0] == 'help':
 		command.append('')
 		if not command[1]:
-			print('')
-			print('Quick list of available commands.')
-			print('For more info type help [command].')
-			print('Commands:')
-			print('')
-			print('help\t| Displays this quick help information or help on specified available command.')
-			print('graph\t| Displays current status on specified country.')
-			print('update\t| Updates database.')
-			print('bar\t| Displays specified cases on a daily, weekly or monthly period for the given country.')
-			print('')
+			print("")
+			print("Quick list of available commands.")
+			print("For more info type help [command].")
+			print("")
+			print("Commands:")
+			print("")
+			print("  help    Displays this quick help information or help on specified available command.")
+			print("  graph   Displays current status on specified country.")
+			print("  update  Updates database.")
+			print("  bar     Displays specified cases on a daily, weekly or monthly period for the given country.")
+			print("")
 		elif command[1] == 'bar':
-			print("""
-				Usage: bar [country] [case] [grouping] [period]
-				[country] - country name, iso2, iso3 or code of the country
-				[case] - confirmed, deaths or recovered. 'c', 'd' or 'r' as shortcuts
-				[grouping] - daily, weekly or monthly stats. 'd', 'w' or 'm' as shortcuts
-				[period] - format is from_date:to_date
-						if daily grouping is specified format is d.m:d.m (ex. 30.3:4.4 means 30th March to 4th April inclusive)
-						if weekly grouping is specified format is w:w (ex. 12:15 means ISO week 12 to week 15 inclusive)
-						if monthly grouping is specified format is m:m (ex. 2:5 means months February to May inclusive)
-						if period is ommited it is replaced with full period for the year (daily - 1.1:31.12, weekly - 0:53, monthly 1:12)
-						if one side if the period is ommited it is replaced with begining or the end of the year:
-							- from_date: means from given day (week, month) to the end of the year
-							- :to_date means from begining of the year to given day (week, month)
-				""")
+			print("")
+			print("BAR:     Displays specified cases on a daily, weekly or monthly period for the given country.")
+			print("")
+			print("Usage:   bar [country] [case] [grouping] [period]")
+			print("Default: bar global confirmed daily 1.1:31.12")
+			print("")
+			print("Options:")
+			print("  [country]   country name, iso2, iso3 or code of the country")
+			print("  [case]      confirmed, deaths or recovered. 'c', 'd' or 'r' as shortcuts")
+			print("  [grouping]  daily, weekly or monthly stats. 'd', 'w' or 'm' as shortcuts")
+			print("  [period]    format is from_date:to_date")
+			print("")
+			print("Period format:")
+			print("  [day.month:day.month] if daily grouping (ex. 30.3:4.4 means 30th March to 4th April inclusive)")
+			print("  [week:week]           if weekly grouping (ex. 12:15 means ISO week 12 to week 15 inclusive)")
+			print("  [month:month]         if monthly grouping (ex. 2:5 means months February to May inclusive)")
+			print("  If period is ommited it is replaced with full period for the year (daily - 1.1:31.12, weekly - 0:53, monthly 1:12)")
+			print("  If one side in period is ommited it is replaced with begining or the end of the year:")
+			print("  - [from_date:] from given day (week, month) to the end of the year")
+			print("  - [:to_date]   from begining of the year to given day (week, month)")
+			print("")
+			print("Examples:")
+			print("  bar italy recovered weekly 9:14 --- Weekly recovered cases in Italy between weeks 9 to 14")
+			print("  bar global c m :5               --- Monthly confirmed cases worldwide from begining of the year to May")
+			print("  bar china c daily 1.3:15.3      --- Daily confirmed cases in China from 1st to 15th March")
+			print("")
+			
 
 
-	elif command[0] in ('q','quit','exit'):
-		break
-
-
-	else: 
-		print('Unknown command')

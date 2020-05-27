@@ -1,5 +1,13 @@
 *.csv
+*.json
 *.swp
-tests.py
 .idea/
-cmd_examples
+csv_files/
+examples/
+.swapfiles/
+test*
+helpers/
+histfile
+pngfiles/
+covid19.db
+__pycache__/
