@@ -96,11 +96,10 @@ def create(graph_type,graph_period,graph_data):
 
 		if countries_count > 1:
 			# Create list (new) with country names (because set is random
-			countries = sorted(countries)
-
 			if cases_count == 1:
 				case = cases.pop()
 				case_data = [row[case] for row in graph_data]
+				countries = [row['short_name'] for row in graph_data]
 
 				plt.figure(figsize=(8,6))
 				plt.bar(countries,case_data)
@@ -112,6 +111,7 @@ def create(graph_type,graph_period,graph_data):
 
 
 			else: #more cases more bars
+				countries = sorted(countries)
 				# Create dictionary with case:values from query
 				cases_data = {case:[] for case in cases}
 				for row in graph_data:
