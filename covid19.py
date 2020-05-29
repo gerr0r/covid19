@@ -154,24 +154,6 @@ while True:
 			pass
 
 
-	elif command[0] == 'list':
-		command.append('') # this will add empty second parameter which will cause printing of all results if not specified
-		c.execute("SELECT iso2,iso3,country_code,short_name FROM countries WHERE short_name LIKE ? ORDER BY short_name",(f'%{command[1]}%',))
-		data = c.fetchall()
-		if not data: 
-			print(f'{command[1]}: Results not found...')
-			continue
-		if command[1]: 
-			print(f'Search for: {command[1]}')
-			print(30*'=')
-		print('ISO2\tISO3\tCode\tNames')
-		print(30*'=')
-		for row in data:
-			print(f'{row[0]}\t{row[1]}\t{row[2]}\t{row[3]}')
-		print(30*'=')
-		print(f'{len(data)} results found.')
-
-
 	elif command[0] == 'info':
 		try:
 			c.execute("SELECT * FROM daily_cases WHERE country=? ORDER BY csv_file", (command[1].capitalize(),))
