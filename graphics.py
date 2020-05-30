@@ -16,8 +16,8 @@ def create(graph_type,graph_period,graph_data):
 	for row in graph_data:
 		for key,value in dict(row).items():
 			if key != 'short_name': test_dict[row['short_name']][key].append(value)
-	print(test_dict.keys())
-	pprint(test_dict)
+	#print(test_dict.keys())
+	#pprint(test_dict)
 	if graph_type == 'plot':
 		if not graph_data:
 			print(f'Input not found...')
@@ -220,3 +220,53 @@ def create(graph_type,graph_period,graph_data):
 				plt.grid(axis='y')
 				plt.legend()
 				plt.show()
+
+
+	if graph_type == 'pie':
+		if len(graph_data) == 1:
+			country = graph_data[0]['short_name']
+
+			if 'week' in graph_data[0].keys():
+				date_format = f" {datetime.strptime(graph_data[0]['date'],'%Y-%m-%d').strftime('week %W (%a, %d %b)')}"
+			elif 'month' in graph_data[0].keys():
+				date_format = f"{datetime.strptime(graph_data[0]['date'],'%Y-%m-%d').strftime('%B (%d')}"
+				date_format += {'1':'th'}.get(date_format[-2],{'1':'st','2':'nd','3':'rd'}.get(date_format[-1],'th')) + ')' # Add ordinality to day
+			else:
+				date_format = datetime.strptime(graph_data[0]['date'],'%Y-%m-%d').strftime('%d %B')
+
+			confirmed = f"{graph_data[0]['confirmed']:,}".replace(',',' ')
+
+			case_count = {'deaths':graph_data[0]['deaths'],'recovered':graph_data[0]['recovered'],'active':graph_data[0]['active']}
+			case_color = {'deaths':'red','recovered':'green','active':'yellow'}
+			cases,colors,labels = [],[],[]
+			for case,count in case_count.items():
+				if count > 0:
+					cases.append(count)
+					count_format = f"{count:,}".replace(',',' ')
+					labels.append(f"{case.title()}: {count_format}")
+					colors.append(case_color[case])
+					
+
+			plt.figure(figsize=(8,6))
+			plt.pie(cases,labels=labels,colors=colors,autopct='%1.1f%%',pctdistance=0.85)
+			plt.title(f"{country.upper()}\n{confirmed} confirmed cases as of {date_format}.")
+			#plt.legend(legend,loc='center left')
+			plt.show(block=False)
+
+		else:
+			case = set(graph_data[0].keys()).intersection(['confirmed','deaths','recovered','active']).pop()
+			cases, labels = [],[]
+			for row in graph_data:
+				if row['short_name'] == 'Global':
+					global_cases = row[case]
+					continue
+				else:
+					cases.append(row[case])
+					labels.append(f"{row['short_name']}: {row[case]}")
+			cases.append(global_cases - sum(cases))
+			labels.append(f"Others: {cases[-1]}")
+
+			plt.figure(figsize=(8,6))
+			plt.pie(cases,labels=labels,autopct='%1.1f%%',pctdistance=0.85)
+			plt.tight_layout()
+			plt.show()
