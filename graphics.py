@@ -254,19 +254,40 @@ def create(graph_type,graph_period,graph_data):
 			plt.show(block=False)
 
 		else:
+			interval = set(graph_data[0].keys()).intersection(['date','week','month']).pop()
+			print(graph_period)
+
+			if interval == 'week':
+				if graph_period[1] == graph_period[2]:
+					title_period = f"week: {graph_period[1]}"
+				else:
+					title_period = f"period: week{graph_period[1]}-week{graph_period[2]}"
+			elif interval == 'month':
+				if graph_period[1] == graph_period[2]:
+					title_period = f"month: {datetime.strptime(str(graph_period[1]),'%m').strftime('%B')}"
+				else:
+					title_period = f"period: {datetime.strptime(str(graph_period[1]),'%m').strftime('%B')}-{datetime.strptime(str(graph_period[2]),'%m').strftime('%B')}"
+			else:
+				if graph_period[1] == graph_period[2]:
+					title_period = f"date: {datetime.strptime(graph_period[1],'%Y-%m-%d').strftime('%B %d')}"
+				else:
+					title_period = f"period: {datetime.strptime(graph_period[1],'%Y-%m-%d').strftime('%B %d')}-{datetime.strptime(graph_period[2],'%Y-%m-%d').strftime('%B %d')}"
+
 			case = set(graph_data[0].keys()).intersection(['confirmed','deaths','recovered','active']).pop()
 			cases, labels = [],[]
 			for row in graph_data:
 				if row['short_name'] == 'Global':
 					global_cases = row[case]
+					global_cases_formated = f"{global_cases:,}".replace(',',' ')
 					continue
 				else:
 					cases.append(row[case])
-					labels.append(f"{row['short_name']}: {row[case]}")
+					labels.append(f"{row['short_name']}: {row[case]:,}".replace(',',' '))
 			cases.append(global_cases - sum(cases))
-			labels.append(f"Others: {cases[-1]}")
+			labels.append(f"Others: {cases[-1]:,}".replace(',',' '))
 
 			plt.figure(figsize=(8,6))
-			plt.pie(cases,labels=labels,autopct='%1.1f%%',pctdistance=0.85)
+			plt.pie(cases,labels=labels,autopct='%1.1f%%',pctdistance=0.85,startangle=-45)
+			plt.title(f"Global {case} cases: {global_cases_formated}\n{title_period.upper()}")
 			plt.tight_layout()
 			plt.show()

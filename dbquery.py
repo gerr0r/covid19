@@ -430,7 +430,7 @@ AND date = (
 			if group_by == 'date': query = f"""
 SELECT
 	short_name,
-	max(date),
+	max(date) AS date,
 	{case}
 FROM (	
 	SELECT
