@@ -1,5 +1,6 @@
 import datetime
 import requests
+import readline
 import sqlite3
 import os, sys
 
@@ -19,9 +20,13 @@ def commandline(line):
 
 	if cmd == 'help': pass
 	elif cmd in ('q','quit'): exit()
-	elif cmd in ('r'):
+	elif cmd in ('re','retry','reload'):
+		print('Reloading last input...')
+		last_command = readline.get_history_item(readline.get_current_history_length()-1)
+		os.execv(sys.executable,['python3',sys.argv[0],last_command])
+	elif cmd in ('r','restart'):
 		print('Restarting program...')
-		os.execv(sys.executable, ['python3'] + sys.argv)
+		os.execv(sys.executable,['python3',sys.argv[0]])
 	elif cmd == 'update':
 		csv_download()
 		print() #clear input prompt

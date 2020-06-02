@@ -283,11 +283,35 @@ def create(graph_type,graph_period,graph_data):
 				else:
 					cases.append(row[case])
 					labels.append(f"{row['short_name']}: {row[case]:,}".replace(',',' '))
+
 			cases.append(global_cases - sum(cases))
 			labels.append(f"Others: {cases[-1]:,}".replace(',',' '))
 
+			min_percent = 1.5
+			cases,labels = zip(*sorted(zip(cases,labels)))
+			percents = [100*amount/global_cases for amount in cases]
+			pie_labels = ['' if percent < min_percent else label for label,percent in zip(labels,percents)]
+			startangle = -(len(pie_labels) - pie_labels.count(''))*3
+			print(pie_labels)
+			print(startangle)
+
 			plt.figure(figsize=(8,6))
-			plt.pie(cases,labels=labels,autopct='%1.1f%%',pctdistance=0.85,startangle=-45)
+
+			patches,_,_ = plt.pie(cases,
+						labels=pie_labels,
+						autopct=lambda percent: f'{percent:.1f}%' if percent > min_percent else '',
+						pctdistance=0.85,
+						startangle=startangle)
+
+			print(patches)
+			
+			legend_handles = [handle for handle,percent in zip(patches,percents) if percent < min_percent]
+			legend_labels = [f"{label} ({percent:.2f}%)" for label,percent in zip(labels,percents) if percent < min_percent]
+
+			#h,l = zip(*[(h,l) for h,l,p in zip(z,legend,percent) if p < 1])
+			print(legend_handles)
+			print(legend_labels)
 			plt.title(f"Global {case} cases: {global_cases_formated}\n{title_period.upper()}")
-			plt.tight_layout()
+			if legend_handles: plt.legend(legend_handles,legend_labels,title=f"Countries below {min_percent}%",bbox_transform=plt.gcf().transFigure,ncol=3,loc=8,bbox_to_anchor=(0.5,0))
+			#plt.tight_layout()
 			plt.show()

@@ -3,7 +3,7 @@ import datetime
 import math
 from matplotlib import pyplot as plt
 from pprint import pprint
-import os
+import os, sys
 
 import validate
 
@@ -25,17 +25,31 @@ readline.read_history_file('histfile')
 
 #os.system('clear')
 
-print('December 2019 - COVID-19 anounced in Wuhan, China.')
-print('   22.01.2020 - First cases.')
-print('   11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
-print(f'   {datetime.date.today().strftime("%d.%m.%Y")} - Today.')
-print()
+def motd():
+	print('December 2019 - COVID-19 anounced in Wuhan, China.')
+	print('   22.01.2020 - First cases.')
+	print('   11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
+	print(f'   {datetime.date.today().strftime("%d.%m.%Y")} - Today.')
+	print()
 
 validate.init_db()
+#print(sys.argv)
+try:
+	last_command = sys.argv[1]
+except:
+	last_command = False
+	motd()
+
 while True:
 	command = False
 	while not command:
-		command = input('Covid-19 >> ')
+		#command = input('Covid-19 >> ')
+		if not last_command:
+			command = input('Covid-19 >> ')
+		else:	
+			command = last_command
+			print(f"Covid-19 >> {last_command}")
+			last_command = False
 		readline.write_history_file('histfile')
 		try:
 			validate.commandline(command)
@@ -44,67 +58,7 @@ while True:
 
 while True:
 
-
-
-
-
-	if command[0] == 'pie':
-		if len(command) == 1:
-			c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY date ORDER BY date DESC LIMIT 1")
-			data = c.fetchall()
-			country = 'Global'
-			confirmed,deaths,recovered = data[0]
-			active = confirmed - deaths - recovered
-		else:
-			req = command[1].replace('_',' ')
-			c.execute("""SELECT country,sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases 
-					WHERE country = 
-					(SELECT short_name FROM countries WHERE ? IN (lower(short_name),lower(iso2),lower(iso3))) 
-					GROUP BY date 
-					ORDER BY date DESC 
-					LIMIT 1""", (req,))
-			data = c.fetchall()
-			if len(data) == 0:
-				print(f'{req}: Input not found...')
-				continue
-			else:
-				country,confirmed,deaths,recovered = data[0]
-				active = confirmed - deaths - recovered
-		if confirmed == 0: #Currently its impossible confirmed to be 0
-			print(f'No cases confirmed in {country.upper()}.')
-			continue
-		else:
-			cases,labels,legend,colors,pcts = [],[],[],[],[]
-			if deaths > 0:
-				cases.append(deaths)
-				labels.append(f'Deaths ({deaths})')
-				colors.append('red')
-				pcts.append(100*deaths/confirmed)
-				legend.append(f'Deaths {round(pcts[-1],1)}% ({deaths})')
-			if recovered > 0:
-				cases.append(recovered)
-				labels.append(f'Recovered ({recovered})')
-				colors.append('green')
-				pcts.append(100*recovered/confirmed)
-				legend.append(f'Recovered {round(pcts[-1],1)}% ({recovered})')
-			if active > 0:
-				cases.append(active)
-				labels.append(f'Active ({active})')
-				colors.append('yellow')
-				pcts.append(100*active/confirmed)
-				legend.append(f'Active {round(pcts[-1],1)}% ({active})')
-
-			if len([i for i in pcts if i >= 97]) == 1 and len(pcts) == 3:
-				plt.pie(cases,colors=colors)
-				plt.legend(legend,loc='center left')
-			else:
-				plt.pie(cases,labels=labels,colors=colors,autopct='%1.1f%%',pctdistance=0.85)
-			plt.title(f'{country.upper()}: Confirmed cases: {confirmed}.')
-			plt.tight_layout()
-			plt.show()
-
-
-	elif command[0] == 'stats':
+	if command[0] == 'stats':
 		if len(command) == 1:
 			country = 'Global'
 			c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY csv_file ORDER BY csv_file DESC LIMIT 2")
