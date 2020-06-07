@@ -35,7 +35,7 @@ def commandline(line):
 		post_args = graph_arguments(pre_args)
 		query = dbquery.graph_dbquery(**post_args)
 		data = get_db_data(query)
-		graphics.create(post_args['type'],post_args['period'],data)
+		graphics.create(post_args['type'],post_args['period'],post_args['country'],data)
 	elif cmd == 'list':
 		list_countries(args)
 	else: 
@@ -76,6 +76,7 @@ def graph_arguments(args):
 			raise ValueError(f'--{key}: Too many values. Expected 1, got {len(value.split())}')	# IF THERE IS MORE THAN ONE VALUE FOR ARGUMENT
 
 	country = set(def_args['country'].split(',')) # REMOVE DUPLICATES
+	
 
 				### FOURTH CHECK : INVALID VALUE FOR TYPE ARGUMENT?
 	type = def_args['type']
@@ -217,7 +218,7 @@ def db_update(file):
 	filelist = []
 	for row in update_dates:
 		filelist.append(row[0])
-	print(csv_file_date,filelist)
+	#print(csv_file_date,filelist)
 	if str(csv_file_date) in filelist:
 		print('Data from this date already in database.')
 	else:
