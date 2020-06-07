@@ -87,6 +87,9 @@ ORDER BY {group_by};
 
 		else:
 			country_list = str(country)[1:-1] # just represent country set as a string and remove the closing curly braces
+			if len(country_list) > 1 and len(cases) > 1:
+				print('Only one case possible at same time for a list of countries. Case is set to default.')
+				cases = ['confirmed']
 			db_cases = ''
 			for case in cases:
 				if case == 'active':
@@ -426,6 +429,9 @@ AND date = (
 				case = 'confirmed' # default
 			else:
 				case = cases.pop()
+
+			if case == 'active':
+				first_date = '2020-01-01' if group_by == 'date' else 0
 
 			if group_by == 'date': query = f"""
 SELECT
