@@ -6,30 +6,27 @@ from datetime import datetime
 from collections import Counter
 from pprint import pprint
 
-def create(graph_type,graph_period,graph_data):
-	test_dict = {}
+def create(graph_type,graph_period,graph_country,graph_data):
 	for row in graph_data:
 		print(dict(row))
-		test_dict[row['short_name']] = {}
-		for key in row.keys():
-			if key != 'short_name': test_dict[row['short_name']][key] = []
-	for row in graph_data:
-		for key,value in dict(row).items():
-			if key != 'short_name': test_dict[row['short_name']][key].append(value)
-	#print(test_dict.keys())
-	#pprint(test_dict)
+
 	if graph_type == 'plot':
 		if not graph_data:
 			print(f'Input not found...')
 		else:
-			fig,ax = plt.subplots(nrows=1,ncols=1)
-			print(fig)
-			print(ax)
-			print(type(graph_data))
-			print(len(graph_data))
-			print(type(graph_data[0]))
-			print(len(graph_data[0]))
-			print(graph_data[0].keys())
+			data_dict = {}
+			for row in graph_data:
+				data_dict[row['short_name']] = {}
+				for key in row.keys():
+					if key != 'short_name': data_dict[row['short_name']][key] = []
+			for row in graph_data:
+				for key,value in dict(row).items():
+					if key != 'short_name': data_dict[row['short_name']][key].append(value)
+			#print(data_dict.keys())
+			#pprint(data_dict)
+			interval = set(graph_data[0].keys()).intersection(['date','week','month']).pop()
+			#fig,ax = plt.subplots(nrows=1,ncols=1)
+			plt.figure(figsize=(8,6))
 			num_countries = set(e['short_name'] for e in graph_data)
 			print(num_countries)
 			print(len(num_countries))
@@ -39,14 +36,14 @@ def create(graph_type,graph_period,graph_data):
 			#return
 			#x=0
 			#plt.style.use('seaborn')
-			for country in test_dict.keys():
-				xaxis = set(test_dict[country].keys()).intersection(['date','week','month']).pop()
-				for case,values in test_dict[country].items():
+			for country in data_dict.keys():
+				xaxis = set(data_dict[country].keys()).intersection(['date','week','month']).pop()
+				for case,values in data_dict[country].items():
 					if case not in ('confirmed','deaths','recovered','active'): continue
 					else:
-						plt.plot(xaxis,case,data=test_dict[country],label=f'{country} - {case}')
-						#plt.set_xticklabels(test_dict[country][xaxis],rotation = 90)
-						#plt.xticks(test_dict[country][xaxis],rotation = 90)
+						plt.plot(xaxis,case,data=data_dict[country],label=f'{country} - {case}')
+						#plt.set_xticklabels(data_dict[country][xaxis],rotation = 90)
+						#plt.xticks(data_dict[country][xaxis],rotation = 90)
 						plt.legend()
 				#x += 1
 			plt.xlabel(xaxis.upper())
@@ -223,7 +220,11 @@ def create(graph_type,graph_period,graph_data):
 
 
 	if graph_type == 'pie':
-		if len(graph_data) == 1:
+		if not graph_data:
+			raise ValueError('No data found')
+		if len(graph_data) == 1 and len(graph_country) > 1:
+			raise ValueError('No data found for specified countries')
+		elif len(graph_data) == 1:
 			country = graph_data[0]['short_name']
 
 			if 'week' in graph_data[0].keys():
@@ -292,8 +293,8 @@ def create(graph_type,graph_period,graph_data):
 			percents = [100*amount/global_cases for amount in cases]
 			pie_labels = ['' if percent < min_percent else label for label,percent in zip(labels,percents)]
 			startangle = -(len(pie_labels) - pie_labels.count(''))*3
-			print(pie_labels)
-			print(startangle)
+			#print(pie_labels)
+			#print(startangle)
 
 			plt.figure(figsize=(8,6))
 
@@ -303,15 +304,17 @@ def create(graph_type,graph_period,graph_data):
 						pctdistance=0.85,
 						startangle=startangle)
 
-			print(patches)
+			#print(patches)
 			
 			legend_handles = [handle for handle,percent in zip(patches,percents) if percent < min_percent]
 			legend_labels = [f"{label} ({percent:.2f}%)" for label,percent in zip(labels,percents) if percent < min_percent]
 
 			#h,l = zip(*[(h,l) for h,l,p in zip(z,legend,percent) if p < 1])
-			print(legend_handles)
-			print(legend_labels)
+			#print(legend_handles)
+			#print(legend_labels)
 			plt.title(f"Global {case} cases: {global_cases_formated}\n{title_period.upper()}")
-			if legend_handles: plt.legend(legend_handles,legend_labels,title=f"Countries below {min_percent}%",bbox_transform=plt.gcf().transFigure,ncol=3,loc=8,bbox_to_anchor=(0.5,0))
+			if legend_handles:				
+				ncol = int(len(legend_handles)/3 + 2/3) if len(legend_handles) <= 6 else 3
+				plt.legend(legend_handles,legend_labels,title=f"Countries below {min_percent}%",bbox_transform=plt.gcf().transFigure,ncol=ncol,loc=8,bbox_to_anchor=(0.5,0))
 			#plt.tight_layout()
 			plt.show()
