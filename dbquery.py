@@ -87,7 +87,7 @@ ORDER BY {group_by};
 
 		else:
 			country_list = str(country)[1:-1] # just represent country set as a string and remove the closing curly braces
-			if len(country_list) > 1 and len(cases) > 1:
+			if len(country) > 1 and len(cases) > 1:
 				print('Only one case possible at same time for a list of countries. Case is set to default.')
 				cases = ['confirmed']
 			db_cases = ''
