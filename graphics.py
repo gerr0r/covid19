@@ -1,111 +1,182 @@
 # Module for creating graphics with matplotlib
 
 from matplotlib import pyplot as plt
-#from matplotlib import dates as mpld
+from matplotlib.ticker import EngFormatter,MaxNLocator
 from datetime import datetime
-from collections import Counter
 from pprint import pprint
 
-def create(graph_type,graph_period,graph_country,graph_data):
-	for row in graph_data:
-		print(dict(row))
+def create(graph_args,graph_data):
 
+	# "Unpack" validated arguments
+	graph_type = graph_args['type']
+	graph_period = graph_args['period']
+	graph_country = graph_args['country']
+	graph_cases = graph_args['cases']
+	graph_debug = graph_args['debug']
+
+	# Print data if debug
+	if graph_debug:
+		for row in graph_data:
+			print(dict(row))
+
+	# Raise error if data empty
+	if not graph_data:
+		raise ValueError('*** No data found')
+
+
+	# Check graph type
 	if graph_type == 'plot':
-		if not graph_data:
-			print(f'Input not found...')
-		else:
-			data_dict = {}
-			for row in graph_data:
-				data_dict[row['short_name']] = {}
-				for key in row.keys():
-					if key != 'short_name': data_dict[row['short_name']][key] = []
-			for row in graph_data:
-				for key,value in dict(row).items():
-					if key != 'short_name': data_dict[row['short_name']][key].append(value)
-			#print(data_dict.keys())
-			#pprint(data_dict)
-			interval = set(graph_data[0].keys()).intersection(['date','week','month']).pop()
-			#fig,ax = plt.subplots(nrows=1,ncols=1)
-			plt.figure(figsize=(8,6))
-			num_countries = set(e['short_name'] for e in graph_data)
-			print(num_countries)
-			print(len(num_countries))
-			num_apps = Counter(e['short_name'] for e in graph_data)
-			print(num_apps)
+		# Check if period is given correctly
+		if graph_period[1] == graph_period[2]:
+			raise ValueError('*** Plot graph requires initial and final period dates/weeks/months.')
 
-			#return
-			#x=0
-			#plt.style.use('seaborn')
-			for country in data_dict.keys():
-				xaxis = set(data_dict[country].keys()).intersection(['date','week','month']).pop()
-				for case,values in data_dict[country].items():
-					if case not in ('confirmed','deaths','recovered','active'): continue
-					else:
-						plt.plot(xaxis,case,data=data_dict[country],label=f'{country} - {case}')
-						#plt.set_xticklabels(data_dict[country][xaxis],rotation = 90)
-						#plt.xticks(data_dict[country][xaxis],rotation = 90)
-						plt.legend()
-				#x += 1
-			plt.xlabel(xaxis.upper())
-			plt.ylabel('Total cases')
-			plt.margins(x=0)
-			if xaxis == 'date': 
-				plt.gcf().autofmt_xdate(rotation=90)
-				for label in plt.gca().xaxis.get_ticklabels()[::2]:
-				    label.set_visible(False)
-			#plt.xticks(xaxis,rotation = 90)
-			#plt.title(f'COVID-19 {req.upper()} CASES')
-			#plt.legend()
-			plt.grid()
-			plt.show()
+		# Create countries set to remove duplicates and count them
+		countries = set(row['short_name'] for row in graph_data)
+		countries_count = len(countries)
+		#print(f"Countries [{countries_count}]: {', '.join(countries)}")
+
+		valid_cases = ['confirmed','deaths','recovered','active']
+		case_color = {'confirmed':'blue','recovered':'green','deaths':'red','active':'orange'}
+		cases = set(graph_data[0].keys()).intersection(valid_cases)
+		cases_count = len(cases)
+		#print(f"Cases [{cases_count}]: {', '.join(cases)}")
+
+		interval = set(graph_data[0].keys()).intersection(['date','week','month']).pop()
+
+		plt.figure(figsize=(8,6))
+
+		if countries_count == 1:
+			# Get country name
+			country = countries.pop()
+
+			# Create cases dictionary
+			cases_data = {case:[] for case in cases}
+
+			# Fill dictionary keys (cases) with lists of values
+			for row in graph_data:
+				for case in cases:
+					cases_data[case].append(row[case])
+
+			# Create list with dates
+			interval_data = [row[interval] for row in graph_data]
+
+			# Create lists with formated dates/weeks/months for X axis
+			if interval == 'week':
+				interval_data = [f'W{week}' for week in interval_data]
+				period_title = f"{interval_data[0].replace('W','week ')} - {interval_data[-1].replace('W','week ')}"
+			elif interval == 'month':
+				interval_data = [datetime.strptime(str(month),'%m').strftime('%b') for month in interval_data]
+				period_title = f"{datetime.strptime(interval_data[0],'%b').strftime('%B')} - {datetime.strptime(interval_data[-1],'%b').strftime('%B')}"
+			else:
+				interval_data = [datetime.strptime(date,'%Y-%m-%d').strftime('%b %d') for date in interval_data]
+				period_title = f'{interval_data[0]} - {interval_data[-1]}'
+
+			# Plot lines for every case specified
+			for case,case_numbers in cases_data.items():
+					plt.plot(interval_data,case_numbers,label=case.title(),color=case_color[case])
+
+			# Set title
+			plt.title(f'{country} cases\n{period_title}'.upper())
+			
+		else:
+			# Get case name
+			case = cases.pop()
+
+			# Remove plural form from deaths case for the title (avoids double plural form 'deaths cases') 
+			case_title = case[:-1] if case == 'deaths' else case
+
+			# Create dictionary with country names and empty lists for dates and case numbers
+			countries_data = {country:{interval:[],case:[]} for country in countries}
+
+			# Fill dictionary with data
+			for row in graph_data:
+				countries_data[row['short_name']][interval].append(row[interval])
+				countries_data[row['short_name']][case].append(row[case])
+
+			# Create sorted list with all unique dates.
+			interval_data = sorted(set(row[interval] for row in graph_data))
+
+			# Create lists with formated dates/weeks/months for X axis
+			if interval == 'week':
+				interval_data = [f'W{week}' for week in interval_data]
+				period_title = f"{interval_data[0].replace('W','week ')} - {interval_data[-1].replace('W','week ')}"
+				for country,country_data in countries_data.items():
+					country_data[interval] = [f'W{week}' for week in country_data[interval]]
+			elif interval == 'month':
+				interval_data = [datetime.strptime(str(month),'%m').strftime('%b') for month in interval_data]
+				period_title = f"{datetime.strptime(interval_data[0],'%b').strftime('%B')} - {datetime.strptime(interval_data[-1],'%b').strftime('%B')}"
+				for country,country_data in countries_data.items():
+					country_data[interval] = [datetime.strptime(str(month),'%m').strftime('%b') for month in country_data[interval]]
+			else:
+				interval_data = [datetime.strptime(date,'%Y-%m-%d').strftime('%b %d') for date in interval_data]
+				period_title = f'{interval_data[0]} - {interval_data[-1]}'
+				for country,country_data in countries_data.items():
+					country_data[interval] = [datetime.strptime(date,'%Y-%m-%d').strftime('%b %d') for date in country_data[interval]]
+
+			# Plot dummy X axis with all dates because start date varies based on first cases
+			plt.plot(interval_data,[0]*len(interval_data),visible=False)
+
+			# Plot country data
+			for country,country_data in countries_data.items():
+				plt.plot(country_data[interval],country_data[case],label=f'{country}')
+
+			# Set title
+			plt.title(f'{case_title} cases\n{period_title}'.upper())
+
+
+		plt.xlabel(interval.upper())
+		plt.ylabel('Total cases')
+		plt.margins(x=0,y=0)
+
+		if interval == 'date':
+			plt.xticks(rotation=90)
+			jump = int(len(interval_data)/30 + 29/30)
+			for index, label in enumerate(plt.gca().xaxis.get_ticklabels()):
+			    if index % jump != 0: label.set_visible(False)
+		plt.legend()
+		plt.tight_layout()
+		plt.grid()
+		plt.show()
 
 	if graph_type == 'bar':
 		# Create countries set to remove duplicates and count them
 		countries = set(row['short_name'] for row in graph_data)
 		countries_count = len(countries)
-		print(f"Countries [{countries_count}]: {', '.join(countries)}")
 
 		valid_cases = ['confirmed','recovered','deaths']
 		case_color = {'confirmed':'blue','recovered':'green','deaths':'red'}
 		cases = set(graph_data[0].keys()).intersection(valid_cases)
 		cases_count = len(cases)
-		print(f"Cases [{cases_count}]: {', '.join(cases)}")
 
 		interval = set(graph_data[0].keys()).intersection(['date','week','month']).pop()
 		interval_dict = {'date':'daily','week':'weekly','month':'monthly'}
-		print(graph_period)
 
 		if interval == 'week':
 			if graph_period[1] == graph_period[2]:
-				title_period = f"week: {graph_period[1]}"
+				title_period = f"cases from week {graph_period[1]}"
 			else:
-				title_period = f"period: week{graph_period[1]}-week{graph_period[2]}"
+				title_period = f"cases from week {graph_period[1]} to week {graph_period[2]}"
 		elif interval == 'month':
 			if graph_period[1] == graph_period[2]:
-				title_period = f"month: {datetime.strptime(str(graph_period[1]),'%m').strftime('%B')}"
+				title_period = f"cases from {datetime.strptime(str(graph_period[1]),'%m').strftime('%B')}"
 			else:
-				title_period = f"period: {datetime.strptime(str(graph_period[1]),'%m').strftime('%B')}-{datetime.strptime(str(graph_period[2]),'%m').strftime('%B')}"
+				title_period = f"cases from {datetime.strptime(str(graph_period[1]),'%m').strftime('%B')} to {datetime.strptime(str(graph_period[2]),'%m').strftime('%B')}"
 		else:
 			if graph_period[1] == graph_period[2]:
-				title_period = f"date: {datetime.strptime(graph_period[1],'%Y-%m-%d').strftime('%B %d')}"
+				title_period = f"cases from {datetime.strptime(graph_period[1],'%Y-%m-%d').strftime('%B %d')}"
 			else:
-				title_period = f"period: {datetime.strptime(graph_period[1],'%Y-%m-%d').strftime('%B %d')}-{datetime.strptime(graph_period[2],'%Y-%m-%d').strftime('%B %d')}"
+				title_period = f"cases from {datetime.strptime(graph_period[1],'%Y-%m-%d').strftime('%B %d')} to {datetime.strptime(graph_period[2],'%Y-%m-%d').strftime('%B %d')}"
 
 		if countries_count > 1:
-			# Create list (new) with country names (because set is random
+
+			plt.figure(figsize=(8,6))
+
 			if cases_count == 1:
 				case = cases.pop()
 				case_data = [row[case] for row in graph_data]
-				countries = [row['short_name'] for row in graph_data]
+				countries = [f"{row['short_name'][0:9]}..." if len(row['short_name']) > 13 else row['short_name'] for row in graph_data]
 
-				plt.figure(figsize=(8,6))
-				plt.bar(countries,case_data)
-				plt.title(f'{case} cases\n{title_period}'.upper())
-				plt.ylabel('CASES FOR PERIOD')
-				plt.tight_layout()
-				plt.grid(axis='y')
-				plt.show()
-
+				plt.barh(countries,case_data,label=case.upper(),color=case_color[case])
 
 			else: #more cases more bars
 				countries = sorted(countries)
@@ -114,30 +185,25 @@ def create(graph_type,graph_period,graph_country,graph_data):
 				for row in graph_data:
 					for case in cases:
 						cases_data[case].append(row[case])
-				print(cases_data)
 
-				import numpy as np
-				plt.figure(figsize=(8,6))
-				index = np.arange(countries_count)
 				width = 0.4 if cases_count == 2 else 0.27 # if cases_count == 3
 				offset = width/2 if cases_count == 2 else width # if cases_count == 3
-				print(index)
 
 				tmp = 0
-				for case in valid_cases:
-					if case in cases_data.keys():
-						#plt.bar(index+tmp,cases_data[case],width,label=case,color=case_color[case])
-						plt.bar([x+tmp for x in list(range(0,countries_count))],cases_data[case],width,label=case,color=case_color[case])
-						tmp += width
+				for case,numbers in cases_data.items():
+					plt.barh([x+tmp for x in list(range(countries_count))],numbers,width,label=case.upper(),color=case_color[case])
+					tmp += width
 
-				#plt.xticks(ticks=index+offset,labels=countries)
-				plt.xticks(ticks=[x+offset for x in list(range(0,countries_count))],labels=countries)
-				plt.title(f"{', '.join(cases)} cases\n{title_period}".upper())
-				plt.ylabel('CASES FOR PERIOD')
-				plt.tight_layout()
-				plt.grid(axis='y')
-				plt.legend()
-				plt.show()
+				plt.yticks(ticks=[x+offset for x in list(range(countries_count))],labels=countries)
+
+			plt.title(f"{title_period}".upper())
+			plt.gca().xaxis.set_major_formatter(EngFormatter())
+			plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+			plt.margins(x=0,y=0)
+			plt.tight_layout()
+			plt.grid(axis='x')
+			plt.legend(fontsize = 'small')
+			plt.show()
 
 		else: # 1 country
 			# Get country name
@@ -146,39 +212,22 @@ def create(graph_type,graph_period,graph_country,graph_data):
 			# Get dates/weeks/months from query and create list
 			interval_data = [row[interval] for row in graph_data]
 
-			# Create list with formated dates/weeks/months for X axis
+			# Create list with formated dates/weeks/months for X axis labels
 			if interval == 'week':
 				interval_data = [f'W{week}' for week in interval_data]
 			elif interval == 'month':
 				interval_data = [datetime.strptime(str(month),'%m').strftime('%b') for month in interval_data]
 			else:
 				interval_data = [datetime.strptime(date,'%Y-%m-%d').strftime('%b %d') for date in interval_data]
-			print(interval_data)
+
+			plt.figure(figsize=(8,6))
 
 			if cases_count == 1:
 				# Get case and create list with values from query
 				case = cases.pop()
 				case_data = [row[case] for row in graph_data]
-				print(case_data)
 
-				#fig, ax = plt.subplots()
-				plt.figure(figsize=(8,6))
-				plt.bar(interval_data,case_data)
-				if interval == 'date':
-					plt.xticks(rotation=90)
-					import math
-					jump = math.ceil(len(interval_data)/30)
-					for index, label in enumerate(plt.gca().xaxis.get_ticklabels()):
-					    if index % jump != 0: label.set_visible(False)
-					del math
-				plt.title(f'{country}\n{case} cases\n{interval_dict[interval]} statistics'.upper())
-				plt.xlabel(interval.upper())
-				plt.ylabel(f'{interval_dict[interval]} cases'.upper())
-				plt.tight_layout()
-				plt.grid(axis='y')
-				plt.savefig('test2.png')
-				#plt.savefig(f'pngfiles/{datetime.datetime.now().timestamp()}.png',dpi=300)
-				plt.show()
+				plt.bar(interval_data,case_data,label=case.upper(),color=case_color[case])
 
 			else: # more cases more bars
 				# Create dictionary with case:values from query
@@ -186,44 +235,38 @@ def create(graph_type,graph_period,graph_country,graph_data):
 				for row in graph_data:
 					for case in cases:
 						cases_data[case].append(row[case])
-				print(cases_data)
 
-				import numpy as np
-				plt.figure(figsize=(8,6))
-				index = np.arange(len(interval_data))
 				width = 0.4 if cases_count == 2 else 0.27 # if cases_count == 3
 				offset = width/2 if cases_count == 2 else width # if cases_count == 3
-				print(index)
 
 				tmp = 0
-				for case in valid_cases:
-					if case in cases_data.keys():
-						plt.bar(index+tmp,cases_data[case],width,label=case,color=case_color[case])
-						tmp += width
+				for case,numbers in cases_data.items():
+					plt.bar([x+tmp for x in list(range(len(interval_data)))],numbers,width,label=case.upper(),color=case_color[case])
+					tmp += width
 
-				plt.xticks(ticks=index+offset,labels=interval_data)
-				if interval == 'date':
-					plt.xticks(rotation=90)
-					import math
-					jump = math.ceil(len(interval_data)/30)
-					for index, label in enumerate(plt.gca().xaxis.get_ticklabels()):
-					    if index % jump != 0: label.set_visible(False)
-					del math
+				plt.xticks(ticks=[x+offset for x in list(range(len(interval_data)))],labels=interval_data)
 
-				plt.title(f"{country}\n{', '.join(cases)} cases\n{interval_dict[interval]} statistics".upper())
-				plt.xlabel(interval.upper())
-				plt.ylabel(f'{interval_dict[interval]} cases'.upper())
-				plt.tight_layout()
-				plt.grid(axis='y')
-				plt.legend()
-				plt.show()
+			if interval in ('date','week'):
+				if len(interval_data) > 12: plt.xticks(rotation=45)
+				jump = int(len(interval_data)/30 + 29/30)
+				for index, label in enumerate(plt.gca().xaxis.get_ticklabels()):
+				    if index % jump != 0: label.set_visible(False)
+
+			plt.title(f"{country} ({interval_dict[interval]} cases)".upper())
+			plt.gca().yaxis.set_major_formatter(EngFormatter())
+			plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
+			plt.margins(x=0.01)
+			plt.tight_layout()
+			plt.grid(axis='y')
+			plt.legend(fontsize = 'small')
+			#plt.savefig('test2.png')
+			#plt.savefig(f'pngfiles/{datetime.datetime.now().timestamp()}.png',dpi=300)
+			plt.show()
 
 
 	if graph_type == 'pie':
-		if not graph_data:
-			raise ValueError('No data found')
 		if len(graph_data) == 1 and len(graph_country) > 1:
-			raise ValueError('No data found for specified countries')
+			raise ValueError('*** No data found for specified countries')
 		elif len(graph_data) == 1:
 			country = graph_data[0]['short_name']
 
