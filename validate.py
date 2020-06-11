@@ -7,6 +7,7 @@ import os, sys
 import dbquery
 import validate_csv
 import graphics
+import helpdocs
 
 #line = 'graph --period w12:51'
 def commandline(line):
@@ -18,7 +19,7 @@ def commandline(line):
 
 				### FIRST CHECK : EXISTING COMMAND?
 
-	if cmd == 'help': pass
+	if cmd == 'help': helpdocs.help(args)
 	elif cmd in ('q','quit'): exit()
 	elif cmd in ('re','retry','reload'):
 		print('Reloading last input...')
@@ -35,9 +36,11 @@ def commandline(line):
 		post_args = graph_arguments(pre_args)
 		query = dbquery.graph_dbquery(**post_args)
 		data = get_db_data(query)
-		graphics.create(post_args['type'],post_args['period'],post_args['country'],data)
+		graphics.create(post_args,data)
 	elif cmd == 'list':
 		list_countries(args)
+	elif cmd == 'stats':
+		show_stats(args)
 	else: 
 		raise ValueError(f'*** {cmd}: unknown command.') 	# IF COMMAND DO NOT EXIST raise error
 
@@ -276,3 +279,55 @@ def db_correction():
 	c.execute("UPDATE daily_cases SET deaths = 0 WHERE deaths = ''")
 	c.execute("UPDATE daily_cases SET recovered = 0 WHERE recovered = ''")
 	conn.commit()
+
+
+
+# Text statistics
+def show_stats(country):
+	conn = sqlite3.connect('covid19.db')
+	c = conn.cursor()
+	if not country:
+		c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY date ORDER BY date DESC LIMIT 2")
+	else:
+		c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases WHERE code = (SELECT country_code FROM countries WHERE ? IN (lower(iso2),lower(iso3),lower(short_name),CAST(country_code AS TEXT))) GROUP BY date ORDER BY date DESC LIMIT 2", (country,))
+	data = c.fetchall()
+	if len(data) == 0:
+		raise ValueError(f'{country.upper()}: Input not found...')
+	elif len(data) == 1: new,old = data[0],(0,0,0)
+	else: new,old = data
+	CN,DN,RN = new # Confirmed Deaths Recovered - New
+	CO,DO,RO = old # Confirmed Deaths Recovered - Old
+
+	print((11+len(country))*'=')
+	print(f'Last info: {country.upper()}')
+	print((11+len(country))*'=')
+
+	try:
+		print(f'{CN} cases confirmed: {CN-CO} new. Growth: {round((CN-CO)/CO*100,1)}%')
+	except ZeroDivisionError:
+		print(f'{CN} cases confirmed.')
+
+	try: 
+		print(f'{DN} death cases reported: {DN-DO} new. Growth: {round((DN-DO)/DO*100,1)}%')
+	except ZeroDivisionError: 
+		print(f'{DN} death cases reported.')
+
+	try: 
+		print(f'{RN} recoveries reported: {RN-RO} new. Growth: {round((RN-RO)/RO*100,1)}%')
+	except ZeroDivisionError: 
+		print(f'{RN} recoveries reported.')
+
+	try:
+		print(f'Active cases: {CN-DN-RN} ({round((CN-DN-RN)/CN*100,1)}%)')
+		print(f'Closed cases: {DN+RN} ({round((DN+RN)/CN*100,1)}%)')
+		print(f'Dynamic death rate: {round(DN/CN*100,1)}% \t*Death cases against total confirmed cases ratio.')
+		print(f'Dynamic recovery rate: {round(RN/CN*100,1)}% \t*Recovery cases against total confirmed cases ratio.')
+	except ZeroDivisionError:
+		pass
+
+	try:
+		print(f'Static death rate: {round(DN/(DN+RN)*100,1)}% \t*Death cases against total closed cases ratio.')
+		print(f'Static recovery rate: {round(RN/(DN+RN)*100,1)}% \t*Recovery cases against total closed cases ratio.')
+	except ZeroDivisionError:
+		pass
+
