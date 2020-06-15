@@ -1,15 +1,89 @@
+import sqlite3
 
-def init_dbquery():
-	
-	query = """CREATE TABLE IF NOT EXISTS daily_cases (
-						code TEXT,
-						confirmed INTEGER NOT NULL DEFAULT 0,
-						deaths INTEGER NOT NULL DEFAULT 0,
-						recovered INTEGER NOT NULL DEFAULT 0,
-						date TEXT)"""
+def dbrequest(cmd,args=''):
+	conn = sqlite3.connect('covid19.db')
+	if cmd == 'graph':
+		conn.row_factory = sqlite3.Row
+		query = graph_dbquery(**args)
+	elif cmd == 'list':
+		query = list_countries_dbquery(args)
+	elif cmd == 'stats':
+		query = show_stats_dbquery(args)
+	elif cmd == 'check':
+		query = check_dbquery()
+	else:
+		 pass
+
+	c = conn.cursor()
+	c.execute(query)
+
+	data = c.fetchall()
+	return data
+
+def dbwrite(data,csv_file_date):
+	conn = sqlite3.connect('covid19.db')
+	c = conn.cursor()
+	for code,cases in data.items():
+		c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?)",(code,cases['confirmed'],cases['deaths'],cases['recovered'],csv_file_date))
+	conn.commit()
+
+
+def dbinit():
+	conn = sqlite3.connect('covid19.db')
+	c = conn.cursor()
+	c.execute("""CREATE TABLE IF NOT EXISTS daily_cases (
+			code TEXT,
+			confirmed INTEGER NOT NULL DEFAULT 0,
+			deaths INTEGER NOT NULL DEFAULT 0,
+			recovered INTEGER NOT NULL DEFAULT 0,
+			date TEXT);""")
+	conn.commit()
+
+
+def check_dbquery():
+
+	query = """
+		SELECT DISTINCT date
+		FROM daily_cases;"""
 	return query
 
+	
+def last_update_dbquery():
 
+	query = "SELECT max(date) from daily_cases"
+	return query
+
+def list_countries_dbquery(string = ''):
+
+	query = f"""
+		SELECT iso2,iso3,country_code,short_name
+		FROM countries
+		WHERE short_name
+		LIKE '%{string}%'
+		ORDER BY short_name;"""
+	return query
+
+def show_stats_dbquery(string = ''):
+	if not string:
+		query = """
+			SELECT sum(confirmed),sum(deaths),sum(recovered)
+			FROM daily_cases
+			GROUP BY date
+			ORDER BY date DESC
+			LIMIT 2;"""
+	else:
+		query = f"""
+			SELECT sum(confirmed),sum(deaths),sum(recovered)
+			FROM daily_cases
+			WHERE code = (
+				SELECT country_code
+				FROM countries
+				WHERE '{string}' IN (lower(iso2),lower(iso3),lower(short_name),CAST(country_code AS TEXT))
+				)
+			GROUP BY date
+			ORDER BY date DESC
+			LIMIT 2;"""
+	return query
 
 
 def graph_dbquery(**kwargs):
@@ -360,7 +434,7 @@ WHERE date = (
 SELECT 
 	'Global' as short_name,
 	CAST(strftime('%{interval}',date) AS INT) AS {group_by},
-	date,
+	date AS last_day,
 	sum(confirmed) AS confirmed,
 	sum(deaths) AS deaths,
 	sum(recovered) AS recovered,
@@ -402,7 +476,7 @@ AND date = (
 SELECT 	
 	short_name,
 	CAST(strftime('%{interval}',date) AS INT) AS {group_by},
-	date,
+	date AS last_day,
 	confirmed,
 	deaths,
 	recovered,

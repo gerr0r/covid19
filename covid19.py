@@ -6,6 +6,7 @@ from pprint import pprint
 import os, sys
 
 import validate
+import dbquery
 
 readline.parse_and_bind('tab: complete')
 
@@ -23,22 +24,22 @@ def complete(text, state):
 readline.set_completer(complete)
 readline.read_history_file('histfile')
 
-#os.system('clear')
+os.system('clear')
 
-def motd():
+def header_msg():
 	print('December 2019 - COVID-19 anounced in Wuhan, China.')
 	print('   22.01.2020 - First cases.')
 	print('   11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
 	print(f'   {datetime.date.today().strftime("%d.%m.%Y")} - Today.')
 	print()
-
-validate.init_db()
+	print('Type <help> for a quick list of available commands.')
+dbquery.dbinit()
 #print(sys.argv)
 try:
 	last_command = sys.argv[1]
 except:
 	last_command = False
-	motd()
+	header_msg()
 
 while True:
 	command = False

@@ -34,13 +34,15 @@ def commandline(line):
 	elif cmd == 'graph':
 		pre_args = [x.strip() for x in parse[1:]]	   # REMOVE SPACES AROUND ARGUMENTS AND THEIR VALUES
 		post_args = graph_arguments(pre_args)
-		query = dbquery.graph_dbquery(**post_args)
-		data = get_db_data(query)
+		#query = dbquery.graph_dbquery(**post_args)
+		data = dbquery.dbrequest(cmd,post_args)
 		graphics.create(post_args,data)
 	elif cmd == 'list':
-		list_countries(args)
+		data = dbquery.dbrequest(cmd,args)
+		list_countries(args,data)
 	elif cmd == 'stats':
-		show_stats(args)
+		data = dbquery.dbrequest(cmd,args)
+		show_stats(args,data)
 	else: 
 		raise ValueError(f'*** {cmd}: unknown command.') 	# IF COMMAND DO NOT EXIST raise error
 
@@ -214,30 +216,17 @@ def csv_download():
 
 def db_update(file):
 	csv_file_date = datetime.datetime.strptime(file[0:-4],'%m-%d-%Y').date() # parse m-d-Y and convert to Y-m-d
-	conn = sqlite3.connect('covid19.db')
-	c = conn.cursor()
-	c.execute("SELECT DISTINCT date FROM daily_cases")
-	update_dates = c.fetchall()
-	filelist = []
-	for row in update_dates:
-		filelist.append(row[0])
-	#print(csv_file_date,filelist)
-	if str(csv_file_date) in filelist:
-		print('Data from this date already in database.')
+	update_dates = dbquery.dbrequest('check')
+	datelist = [row[0] for row in update_dates]
+	#print(csv_file_date,datelist)
+	if str(csv_file_date) in datelist:
+		print(f'Data from {csv_file_date} already in database.')
 	else:
 		data = validate_csv.csv_optimize(f'csv_files/{file}')
-		conn = sqlite3.connect('covid19.db')
-		c = conn.cursor()
-		for code,cases in data.items():
-			c.execute("INSERT INTO daily_cases VALUES (?,?,?,?,?)",(code,cases['confirmed'],cases['deaths'],cases['recovered'],csv_file_date))
-		conn.commit()
+		dbquery.dbwrite(data,csv_file_date)
 
 
-def list_countries(string = ''):
-	conn = sqlite3.connect('covid19.db')
-	c = conn.cursor()
-	c.execute("SELECT iso2,iso3,country_code,short_name FROM countries WHERE short_name LIKE ? ORDER BY short_name",(f'%{string}%',))
-	data = c.fetchall()
+def list_countries(string,data):
 	if not data: 
 		print(f'{string}: Results not found...')
 		return
@@ -251,26 +240,6 @@ def list_countries(string = ''):
 	print(30*'=')
 	print(f'{len(data)} results found.')
 
-	
-
-def init_db():
-	conn = sqlite3.connect('covid19.db')
-	c = conn.cursor()
-	query = dbquery.init_dbquery()
-	c.execute(query)
-	conn.commit()
-
-def get_db_data(query):
-	conn = sqlite3.connect('covid19.db')
-	conn.row_factory = sqlite3.Row
-	c = conn.cursor()
-	c.execute(query)
-	data = c.fetchall()
-	return data
-
-
-
-
 # Some database corrections:
 def db_correction():
 
@@ -283,14 +252,7 @@ def db_correction():
 
 
 # Text statistics
-def show_stats(country):
-	conn = sqlite3.connect('covid19.db')
-	c = conn.cursor()
-	if not country:
-		c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases GROUP BY date ORDER BY date DESC LIMIT 2")
-	else:
-		c.execute("SELECT sum(confirmed),sum(deaths),sum(recovered) FROM daily_cases WHERE code = (SELECT country_code FROM countries WHERE ? IN (lower(iso2),lower(iso3),lower(short_name),CAST(country_code AS TEXT))) GROUP BY date ORDER BY date DESC LIMIT 2", (country,))
-	data = c.fetchall()
+def show_stats(country,data):
 	if len(data) == 0:
 		raise ValueError(f'{country.upper()}: Input not found...')
 	elif len(data) == 1: new,old = data[0],(0,0,0)
