@@ -26,9 +26,8 @@ def create(graph_args,graph_data):
 
 	# Check graph type
 	if graph_type == 'plot':
-		# Check if period is given correctly
-		if start_date_request == final_date_request:
-			raise ValueError('*** Initial and final period dates/weeks/months must differ for plot graphs.')
+		if len(graph_data) == 1:
+			raise ValueError('*** Not enough data to plot')
 
 		# Create countries set to remove duplicates and count them
 		countries = set(row['short_name'] for row in graph_data)
@@ -44,12 +43,12 @@ def create(graph_args,graph_data):
 		if graph_data[0][interval] > start_date_request:
 			date_asked = human_date(interval,start_date_request,'title')
 			date_given = human_date(interval,graph_data[0][interval],'title')
-			print(f"*** Warning: Data request is from {date_asked}. First data is from {date_given}. First date adjusted to fit.")
+			print(f"*** Notice: First record is from {date_given}.")
 
 		if graph_data[-1][interval] < final_date_request:
 			date_asked = human_date(interval,final_date_request,'title')
 			date_given = human_date(interval,graph_data[-1][interval],'title')
-			print(f"*** Warning: Data request is from {date_asked}. Last data is from {date_given}. Last date adjusted to fit.")
+			print(f"*** Notice: Last records is from {date_given}.")
 
 		plt.figure(figsize=(8,6))
 
@@ -152,12 +151,12 @@ def create(graph_args,graph_data):
 			if graph_data[0][interval] > start_date_request:
 				date_asked = human_date(interval,start_date_request,'title')
 				date_given = human_date(interval,graph_data[0][interval],'title')
-				print(f"*** Warning: Data request is from {date_asked}. First data is from {date_given}. First date adjusted to fit.")
+				print(f"*** Notice: First record is from {date_given}.")
 
 			if graph_data[-1][interval] < final_date_request:
 				date_asked = human_date(interval,final_date_request,'title')
 				date_given = human_date(interval,graph_data[-1][interval],'title')
-				print(f"*** Warning: Data request is from {date_asked}. Last data is from {date_given}. Last date adjusted to fit.")
+				print(f"*** Notice: Last records is from {date_given}.")
 
 			# Get country name
 			country = graph_data[0]['short_name']
@@ -211,7 +210,7 @@ def create(graph_args,graph_data):
 			if graph_data[-1][interval] < final_date_request:
 				date_asked = human_date(interval,final_date_request,'title')
 				date_given = human_date(interval,graph_data[-1][interval],'title')
-				print(f"*** Warning: Data request is from {date_asked}. Last data is from {date_given}. Last date adjusted to fit.")
+				print(f"*** Notice: Last records is from {date_given}.")
 
 			countries = [f"{row['short_name'][0:9]}..." if len(row['short_name']) > 13 else row['short_name'] for row in graph_data]
 

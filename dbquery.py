@@ -11,6 +11,8 @@ def dbrequest(cmd,args=''):
 		query = show_stats_dbquery(args)
 	elif cmd == 'check':
 		query = check_dbquery()
+	elif cmd == 'last_update':
+		query = last_update_dbquery()
 	else:
 		 pass
 
@@ -422,11 +424,8 @@ SELECT
 	sum(recovered) AS recovered,
 	sum(confirmed) - sum(deaths) - sum(recovered) AS active
 FROM daily_cases
-WHERE date = (
-	SELECT max(date)
-	FROM daily_cases
-	WHERE date <= '{last_date}'
-	)
+WHERE date = '{last_date}'
+GROUP BY date
 """
 
 
@@ -445,6 +444,7 @@ WHERE date = (
 	FROM daily_cases
 	WHERE CAST(strftime('%{interval}',date) AS INT) <= {last_date}
 	)
+GROUP BY {group_by}
 """
 
 		elif len(country) == 1 and 'global' not in country:

@@ -26,14 +26,22 @@ readline.read_history_file('histfile')
 
 os.system('clear')
 
+dbquery.dbinit()
+last_update = dbquery.dbrequest('last_update')
+last_update = datetime.datetime.strptime(last_update[0][0],'%Y-%m-%d').strftime('%d.%m.%Y') if last_update else 'N/A'.rjust(10)
+current_date = datetime.date.today().strftime('%d.%m.%Y')
+
 def header_msg():
 	print('December 2019 - COVID-19 anounced in Wuhan, China.')
-	print('   22.01.2020 - First cases.')
+	print('   22.01.2020 - First reported cases.')
 	print('   11.03.2020 - World Health Organization declares coronavirus COVID-19 as pandemic.')
-	print(f'   {datetime.date.today().strftime("%d.%m.%Y")} - Today.')
+	print()
+	print(f"   {last_update} - Last update.")
+	print(f"   {current_date} - Current date.")
 	print()
 	print('Type <help> for a quick list of available commands.')
-dbquery.dbinit()
+
+
 #print(sys.argv)
 try:
 	last_command = sys.argv[1]
