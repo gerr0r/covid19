@@ -110,9 +110,18 @@ def graph_arguments(args):
 
 	period = set_bounderies(def_args['period'])
 
+	if type == 'plot' and period[1] == period[2]:
+		raise ValueError('*** Initial and final period dates/weeks/months must differ for plot graphs.')
+
 	return {'type':type,'country':country,'cases':cases,'period':period,'debug':debug}
 
 def set_bounderies(period):
+
+	last_update = dbquery.dbrequest('last_update')
+	if not last_update:
+		raise ValueError('*** Warning: Can not retrieve last update from database. Use <update> to fix.')
+	else:
+		last_update = last_update[0][0]
 
 	if period.startswith(('d','w','m')):
 		interval = period[0]
@@ -125,8 +134,11 @@ def set_bounderies(period):
 
 
 	if interval == 'd':
-		if not from_: from_ = '01.01'
-		if not to_: to_ = '31.12'
+		last_day = int(datetime.datetime.strptime(last_update,'%Y-%m-%d').strftime('%d'))
+		last_month = int(datetime.datetime.strptime(last_update,'%Y-%m-%d').strftime('%m'))
+
+		if not from_: from_ = '22.01'
+		if not to_: to_ = f"{last_day}.{last_month}"
 
 		parse_from = from_.split('.')
 		parse_to = to_.split('.')
@@ -146,13 +158,17 @@ def set_bounderies(period):
 			raise ValueError('Last date is invalid.')
 		if from_month > to_month or (from_month == to_month and from_day > to_day):
 			raise ValueError('First date exceeds last date.')
+		if to_month > last_month or (to_month == last_month and to_day > last_day):
+			raise ValueError(f"Last date exceeds last update ({datetime.datetime.strptime(last_update,'%Y-%m-%d').strftime('%B, %d')})")
 
 		from_ = datetime.date(2020,from_month,from_day).isoformat()
 		to_ = datetime.date(2020,to_month,to_day).isoformat()
 
 	if interval == 'w':
-		if not from_: from_ = 0 # first week default if not set
-		if not to_: to_ = 53 # last week default if not set
+		last_ = int(datetime.datetime.strptime(last_update,'%Y-%m-%d').strftime('%W'))
+
+		if not from_: from_ = 3 # first week default if not set
+		if not to_: to_ = last_ # last week default if not set
 
 		try: 
 			from_ = int(from_)
@@ -166,12 +182,16 @@ def set_bounderies(period):
 			raise ValueError('Last week out of range. Expected value between 0 and 53.')
 		if from_ > to_:
 			raise ValueError('First week exceeds last week.')
+		if to_ > last_:
+			raise ValueError(f"Last week exceeds last update (week {last_}).")
 
 		interval = 'W' # for sqlite week numbering notation
 
 	if interval == 'm':
+		last_ = int(datetime.datetime.strptime(last_update,'%Y-%m-%d').strftime('%m'))
+
 		if not from_: from_ = 1 # first month default if not set
-		if not to_: to_ = 12 # last month default if not set
+		if not to_: to_ = last_ # last month default if not set
 
 		try: 
 			from_ = int(from_)
@@ -185,6 +205,8 @@ def set_bounderies(period):
 			raise ValueError('Last month out of range. Expected value between 1 and 12.')
 		if from_ > to_:
 			raise ValueError('First month exceeds last month.')
+		if to_ > last_:
+			raise ValueError(f"Last month exceeds last update ({datetime.datetime.strptime(last_update,'%Y-%m-%d').strftime('%B')}).")
 
 
 	return tuple((interval,from_,to_))
